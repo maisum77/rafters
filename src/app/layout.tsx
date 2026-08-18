@@ -17,6 +17,7 @@ const spaceGrotesk = Space_Grotesk({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 const fraunces = Fraunces({
@@ -24,6 +25,7 @@ const fraunces = Fraunces({
   subsets: ["latin"],
   style: ["normal", "italic"],
   axes: ["SOFT", "WONK"],
+  preload: false,
 });
 
 const TITLE = "Rafters — A four-person digital agency";

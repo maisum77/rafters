@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/deprecation-guard";
 import { Canvas, useThree } from "@react-three/fiber";
 import type { CanvasProps } from "@react-three/fiber";
 import { Suspense, useEffect } from "react";

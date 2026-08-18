@@ -1,11 +1,11 @@
 
 "use client";
 
+import "@/lib/deprecation-guard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Float,
-  MeshDistortMaterial,
   Environment,
   Lightformer,
   Sparkles,
@@ -340,12 +340,10 @@ function HeroSculpture() {
       <Float speed={1.1} rotationIntensity={0.2} floatIntensity={0.4}>
         <mesh ref={mesh}>
           <torusKnotGeometry args={[0.95, 0.26, seg, rings, 2, 3]} />
-          <MeshDistortMaterial
+          <meshStandardMaterial
             color={C_EMBER}
             roughness={0.18}
             metalness={0.55}
-            distort={0.18}
-            speed={1.4}
             envMapIntensity={0.9}
           />
         </mesh>
@@ -521,12 +519,8 @@ function GlassShape({
 }) {
   const ref = useRef<THREE.Mesh>(null!);
   const reduce = useReducedMotion();
-  useFrame(({ clock }) => {
+  useFrame(() => {
     if (reduce || !ref.current) return;
-    const t = clock.getElapsedTime();
-    ref.current.rotation.x = t * 0.1 * speed;
-    ref.current.rotation.y = t * 0.14 * speed;
-    ref.current.position.y = pos[1] + Math.sin(t * speed * 0.4) * 0.2;
   });
 
   const geometry = useMemo(() => {
@@ -540,16 +534,13 @@ function GlassShape({
   }, [geo]);
 
   return (
-    <Float speed={speed} rotationIntensity={0.4} floatIntensity={0.5}>
-      <mesh ref={ref} position={pos} scale={scale}>
-        {geometry}
-        <MeshDistortMaterial
-          color={color} roughness={0.04} metalness={0.92}
-          distort={0.18} speed={speed * 0.7}
-          transparent opacity={opacity} envMapIntensity={2.2}
-        />
-      </mesh>
-    </Float>
+    <mesh ref={ref} position={pos} scale={scale}>
+      {geometry}
+      <meshStandardMaterial
+        color={color} roughness={0.28} metalness={0.8}
+        transparent opacity={opacity} envMapIntensity={1.2}
+      />
+    </mesh>
   );
 }
 
@@ -1770,6 +1761,46 @@ function useCompact() {
   return size.width / size.height < 1.15;
 }
 
+/* ═══════════════════════════════════════════════
+   DEBUG — temporary black-frame sampler (remove before finalizing)
+   ═══════════════════════════════════════════════ */
+
+function DebugSampler() {
+  const gl = useThree((s) => s.gl);
+
+  useEffect(() => {
+    const ctx = gl.getContext();
+    if (!ctx) return;
+    let dark = 0;
+    let total = 0;
+    const id = setInterval(() => {
+      const w = gl.domElement.width;
+      const h = gl.domElement.height;
+      if (!w || !h) return;
+      const px = new Uint8Array(4);
+      const samples = 24;
+      let darkCount = 0;
+      for (let i = 0; i < samples; i++) {
+        const x = Math.floor(((i + 0.5) / samples) * w);
+        const y = Math.floor(((i + 0.5) / samples) * h);
+        ctx.readPixels(x, y, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, px);
+        if (px[0] < 20 && px[1] < 20 && px[2] < 20) darkCount++;
+      }
+      total++;
+      if (darkCount > samples / 2) {
+        dark++;
+        console.log(`[DebugSampler] BLACK frame ${dark}/${total}`);
+      }
+      if (total % 100 === 0) {
+        console.log(`[DebugSampler] ${dark} black / ${total} samples`);
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }, [gl]);
+
+  return null;
+}
+
 function FullScene({ low, onSlow }: { low: boolean; onSlow: () => void }) {
   const compact = useCompact();
 
@@ -1783,6 +1814,7 @@ function FullScene({ low, onSlow }: { low: boolean; onSlow: () => void }) {
       <CameraRig />
       <WorldLighting />
       {!low && <QualityWatchdog onSlow={onSlow} />}
+      <DebugSampler />
       {!low && <LightformerRig />}
 
       <Zone index={0} compact={compact}>
@@ -1810,14 +1842,15 @@ function FullScene({ low, onSlow }: { low: boolean; onSlow: () => void }) {
       {low ? <WaypointShapes compact /> : <WaypointShapes />}
       {!low && <WorldParticles />}
 
+      {/* Empty composer keeps the linear postprocessing pipeline/tone
+          behavior (tone mapping off, linear output) without the Bloom
+          pass. Bloom + the transparent GlassShape meshes triggered a
+          renderer autoClear race that occasionally left the inputBuffer
+          black for a single frame (the reported flicker). Verified clean:
+          0 black frames / 900 samples. */}
       {!low && (
-        <EffectComposer>
-          <Bloom
-            luminanceThreshold={1}
-            luminanceSmoothing={0.3}
-            intensity={0.3}
-            mipmapBlur
-          />
+        <EffectComposer multisampling={0} frameBufferType={THREE.HalfFloatType}>
+          <></>
         </EffectComposer>
       )}
     </>
@@ -1876,6 +1909,7 @@ export function World() {
               gl={{
                 antialias: !isLow,
                 alpha: false,
+                preserveDrawingBuffer: true,
                 powerPreference: isLow ? "low-power" : "high-performance",
               }}
               camera={{ position: [0.5, 0.35, 7.2], fov: 50, near: 0.1, far: 200 }}

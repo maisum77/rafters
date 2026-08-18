@@ -178,7 +178,7 @@ function FinaleSceneContent() {
       <ParticleVortex count={900} />
       <Embers count={35} />
 
-      <EffectComposer>
+      <EffectComposer multisampling={0} frameBufferType={THREE.HalfFloatType}>
         <Bloom
           luminanceThreshold={0.15}
           luminanceSmoothing={0.9}

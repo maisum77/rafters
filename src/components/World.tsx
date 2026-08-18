@@ -7,6 +7,7 @@ import {
   Float,
   MeshDistortMaterial,
   Environment,
+  Lightformer,
   Sparkles,
   RoundedBox,
   Text,
@@ -15,6 +16,8 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { useRouter } from "next/navigation";
 import * as THREE from "three";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { isLowTier } from "@/lib/device-tier";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 /* ═══════════════════════════════════════════════
    SCROLL PROGRESS STORE
@@ -325,11 +328,14 @@ function HeroSculpture() {
     }
   });
 
+  const seg = reduce || isLowTier() ? 120 : 200;
+  const rings = reduce || isLowTier() ? 24 : 32;
+
   return (
     <group>
       <Float speed={1.1} rotationIntensity={0.2} floatIntensity={0.4}>
         <mesh ref={mesh}>
-          <torusKnotGeometry args={[0.95, 0.26, 200, 32, 2, 3]} />
+          <torusKnotGeometry args={[0.95, 0.26, seg, rings, 2, 3]} />
           <MeshDistortMaterial
             color={C_EMBER}
             roughness={0.18}
@@ -340,7 +346,7 @@ function HeroSculpture() {
           />
         </mesh>
         <mesh ref={wire}>
-          <torusKnotGeometry args={[0.95, 0.26, 100, 20, 2, 3]} />
+          <torusKnotGeometry args={[0.95, 0.26, reduce || isLowTier() ? 60 : 100, reduce || isLowTier() ? 12 : 20, 2, 3]} />
           <meshBasicMaterial color={C_EMBER_DEEP} wireframe transparent opacity={0.1} />
         </mesh>
       </Float>
@@ -1666,6 +1672,40 @@ function WorldLighting() {
   );
 }
 
+/**
+ * Procedural environment map — replaces the drei `Environment preset`
+ * (which fetched an HDR from a third-party CDN at runtime and popped the
+ * whole scene's lighting in once it arrived). Local, instant, no flash.
+ */
+function LightformerRig() {
+  return (
+    <Environment resolution={256} frames={1}>
+      <Lightformer
+        intensity={0.9}
+        color="#ffffff"
+        position={[0, 5, 0]}
+        scale={[12, 12, 1]}
+        rotation={[Math.PI / 2, 0, 0]}
+        form="rect"
+      />
+      <Lightformer
+        intensity={0.6}
+        color={C_EMBER}
+        position={[-6, 0, 4]}
+        scale={[6, 6, 1]}
+        form="rect"
+      />
+      <Lightformer
+        intensity={0.45}
+        color={C_EMBER_DEEP}
+        position={[6, -2, 2]}
+        scale={[6, 6, 1]}
+        form="rect"
+      />
+    </Environment>
+  );
+}
+
 /* ═══════════════════════════════════════════════
    FULL SCENE
    ═══════════════════════════════════════════════ */
@@ -1700,7 +1740,7 @@ function FullScene({ low }: { low: boolean }) {
       <fog attach="fog" args={["#f4f1ea", 10, 23]} />
       <CameraRig />
       <WorldLighting />
-      {!low && <Environment preset="city" environmentIntensity={0.15} />}
+      {!low && <LightformerRig />}
 
       <Zone index={0} compact={compact}>
         <HeroZone compact={compact} />
@@ -1748,6 +1788,7 @@ function FullScene({ low }: { low: boolean }) {
 export function World() {
   const reduce = useReducedMotion();
   const [mobile, setMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -1757,22 +1798,40 @@ export function World() {
     return () => mq.removeEventListener("change", check);
   }, []);
 
-  // Low tier: small screens and reduced-motion users get a lighter scene —
-  // capped pixel ratio, no environment HDR, no bloom, no particle systems.
-  const low = reduce || mobile;
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Low tier: small screens, reduced-motion users and weak laptops get a
+  // lighter scene — capped pixel ratio, no environment HDR, no bloom, no
+  // particle systems. This is what stops the flicker on iGPU machines.
+  const low = reduce || mobile || isLowTier();
 
   return (
-    <div className="world-root" style={{ height: `${ZONES * 100}vh` }}>
+    <div className="world-root" data-theme-bg="#f4f1ea" style={{ height: `${ZONES * 100}vh` }}>
       <div className="world-sticky">
         <div className="world-vignette" />
-        <Canvas
-          className="world-canvas"
-          dpr={low ? [1, 1] : [1, 1.5]}
-          gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-          camera={{ position: [0.5, 0.35, 7.2], fov: 50, near: 0.1, far: 200 }}
-        >
-          <FullScene low={low} />
-        </Canvas>
+        {mounted && (
+          <ErrorBoundary
+            fallback={
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="font-serif text-2xl italic text-ink">
+                  We make brands move.
+                </span>
+              </div>
+            }
+          >
+            <Canvas
+              className="world-canvas"
+              dpr={low ? [1, 1] : [1, 1.25]}
+              gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+              camera={{ position: [0.5, 0.35, 7.2], fov: 50, near: 0.1, far: 200 }}
+            >
+              <FullScene low={low} />
+            </Canvas>
+          </ErrorBoundary>
+        )}
       </div>
     </div>
   );

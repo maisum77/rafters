@@ -5,8 +5,8 @@ import { gsap } from "@/lib/gsap";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import Loader from "@/components/ui/3d-box-loader-animation";
 
-const MIN_VISIBLE_MS = 600;
-const MAX_WAIT_MS = 15000;
+const MIN_VISIBLE_MS = 900;
+const MAX_WAIT_MS = 4000;
 const SEEN_KEY = "rafters:preloader-seen";
 
 export function Preloader() {
@@ -34,14 +34,13 @@ export function Preloader() {
 
     document.body.style.overflow = "hidden";
 
-    let fontsReady = false;
     let minElapsed = false;
     let maxTimedOut = false;
     let exited = false;
 
     const tryExit = () => {
       if (exited) return;
-      if ((fontsReady && minElapsed) || maxTimedOut) {
+      if (minElapsed || maxTimedOut) {
         exited = true;
         sessionStorage.setItem(SEEN_KEY, "1");
         gsap.to(ref.current, {
@@ -63,18 +62,14 @@ export function Preloader() {
       tryExit();
     }, MAX_WAIT_MS);
 
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        fontsReady = true;
-        tryExit();
-      });
-    } else {
-      fontsReady = true;
-    }
+    // Hard fallback: if the GSAP reveal never completes (script hiccup,
+    // GPU-driven mask failure), force-dismiss so the page is never blocked.
+    const bailTimer = window.setTimeout(finish, MAX_WAIT_MS + 2500);
 
     return () => {
       window.clearTimeout(minTimer);
       window.clearTimeout(maxTimer);
+      window.clearTimeout(bailTimer);
       document.body.style.overflow = "";
     };
   }, [reduce]);

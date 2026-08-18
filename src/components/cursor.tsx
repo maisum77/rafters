@@ -79,7 +79,9 @@ export function Cursor() {
     <>
       <div ref={dot} className="cursor-dot" aria-hidden="true" />
       <div ref={ring} className="cursor-ring" aria-hidden="true">
-        <span ref={label} className="cursor-ring__label" />
+        <span className="cursor-ring__inner">
+          <span ref={label} className="cursor-ring__label" />
+        </span>
       </div>
     </>
   );

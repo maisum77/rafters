@@ -46,12 +46,13 @@ const C_EMBER = "#9f86e0";
 const C_EMBER_DEEP = "#7b62c9";
 const C_CREAM = "#fdfcf8";
 const C_LINE = "#d6cadf";
+const C_GOLD = "#e9b44c";
 
 /* Camera keyframes: [scrollProgress, x, y, z] */
 const CAM_KEYS: [number, number, number, number][] = [
   [0.0, 0.5, 0.35, 7.2],
   [1 / 6, 0.2, 0.3, -ZONE_DEPTH + 6],
-  [2 / 6, -0.1, 0.25, -ZONE_DEPTH * 2 + 6],
+  [2 / 6, -0.1, 0.4, -ZONE_DEPTH * 2 + 6],
   [3 / 6, 0.15, 0.3, -ZONE_DEPTH * 3 + 6],
   [4 / 6, -0.05, 0.3, -ZONE_DEPTH * 4 + 6],
   [5 / 6, 0.1, 0.34, -ZONE_DEPTH * 5 + 6],
@@ -597,20 +598,138 @@ function ManifestoZone({ compact }: { compact: boolean }) {
 }
 
 /* ═══════════════════════════════════════════════
-   ZONE 2 — PROOF (3D quote cards)
+   ZONE 2 — PROOF (3D review cards)
    ═══════════════════════════════════════════════ */
 
 const PROOF = [
-  { figure: "2 projects", text: "Shipped live — an e-commerce storefront and a booking-first dental practice." },
-  { figure: "1 roof", text: "Web, SEO, ads, content and social — argued in one room until it works." },
-  { figure: "0 hand-offs", text: "No account managers. The person you brief is the person who builds it." },
-  { figure: "4 people", text: "Every discipline your brand needs, in one honest team." },
+  {
+    name: "La-Tani",
+    role: "Founder · jewellery brand",
+    tag: "STOREFRONT",
+    stars: 5,
+    text: "Our storefront finally feels as premium as our jewellery — sharp photos on slow mobile, secure, built to sell.",
+  },
+  {
+    name: "A buyer",
+    role: "Verified buyer",
+    tag: "POST-PURCHASE",
+    stars: 5,
+    text: "Ordered a polki set after seeing it on the site. Honest photos, smooth delivery, and a gorgeous piece.",
+  },
+  {
+    name: "Dr. Ghani",
+    role: "Founder · dental practice",
+    tag: "GOOGLE REVIEW",
+    stars: 5,
+    text: "Patients book in minutes now. The emergency line is one tap away, and Google finds us.",
+  },
+  {
+    name: "A patient",
+    role: "New patient",
+    tag: "FIRST VISIT",
+    stars: 5,
+    text: "Found the practice on Google, booked in under a minute, and knew exactly what to expect.",
+  },
 ];
 
-function ProofCard({
-  figure, text, position, tilt, scale = 1,
+/** Five-point star geometry facing the camera — used for review ratings. */
+function StarMesh({
+  radius = 0.075,
+  position = [0, 0, 0],
 }: {
-  figure: string; text: string;
+  radius?: number;
+  position?: [number, number, number];
+}) {
+  const geometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    const inner = radius * 0.45;
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? radius : inner;
+      const a = (i * Math.PI) / 5 - Math.PI / 2;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+  }, [radius]);
+  return (
+    <mesh geometry={geometry} position={position}>
+      <meshStandardMaterial
+        color={C_GOLD}
+        emissive={C_GOLD}
+        emissiveIntensity={1.35}
+        metalness={0.45}
+        roughness={0.3}
+      />
+    </mesh>
+  );
+}
+
+/** Small verified badge — ember circle with a cream checkmark. */
+function CheckBadge({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh>
+        <circleGeometry args={[0.085, 28]} />
+        <meshStandardMaterial
+          color={C_EMBER_DEEP}
+          roughness={0.35}
+          metalness={0.2}
+          emissive={C_EMBER_DEEP}
+          emissiveIntensity={0.5}
+        />
+      </mesh>
+      <group position={[0, 0, 0.014]}>
+        <mesh rotation={[0, 0, -0.62]} position={[-0.007, 0.004, 0]}>
+          <boxGeometry args={[0.062, 0.013, 0.009]} />
+          <meshBasicMaterial color={C_CREAM} />
+        </mesh>
+        <mesh rotation={[0, 0, 0.66]} position={[0.014, -0.015, 0]}>
+          <boxGeometry args={[0.04, 0.013, 0.009]} />
+          <meshBasicMaterial color={C_CREAM} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/** Small source chip — e.g. GOOGLE REVIEW, STOREFRONT. */
+function TagChip({ label, position }: { label: string; position: [number, number, number] }) {
+  const w = 1.05;
+  const h = 0.24;
+  return (
+    <group position={position}>
+      <RoundedBox args={[w, h, 0.03]} radius={h / 2} smoothness={6} position={[0, 0, -0.004]}>
+        <meshBasicMaterial color={C_EMBER} transparent opacity={0.4} />
+      </RoundedBox>
+      <RoundedBox args={[w - 0.06, h - 0.06, 0.03]} radius={(h - 0.06) / 2} smoothness={6}>
+        <meshBasicMaterial color={C_CREAM} />
+      </RoundedBox>
+      <mesh position={[-w / 2 + 0.16, 0, 0.02]}>
+        <circleGeometry args={[0.026, 16]} />
+        <meshBasicMaterial color={C_EMBER} />
+      </mesh>
+      <Text
+        font={FONT_SANS_MED}
+        fontSize={0.085}
+        color={C_EMBER_DEEP}
+        letterSpacing={0.12}
+        anchorX="center"
+        anchorY="middle"
+        position={[0.1, 0, 0.02]}
+      >
+        {label}
+      </Text>
+    </group>
+  );
+}
+
+function ProofCard({
+  name, role, tag, stars, text, position, tilt, scale = 1,
+}: {
+  name: string; role: string; tag: string; stars: number; text: string;
   position: [number, number, number];
   tilt: number;
   scale?: number;
@@ -661,18 +780,55 @@ function ProofCard({
         />
       </RoundedBox>
 
+      {/* decorative serif quote mark */}
       <Text
         font={FONT_SERIF}
-        fontSize={0.44}
+        fontSize={1.2}
+        color={C_EMBER}
+        material-transparent
+        material-opacity={0.3}
+        anchorX="right"
+        anchorY="top"
+        position={[1.3, 0.72, 0.09]}
+      >
+        {"\u201C"}
+      </Text>
+
+      {/* name + verified badge */}
+      <Text
+        font={FONT_SERIF}
+        fontSize={0.4}
         color={C_INK}
         anchorX="left"
         anchorY="middle"
-        position={[-1.36, 0.48, 0.04]}
+        position={[-1.36, 0.58, 0.09]}
       >
-        {figure}
+        {name}
+      </Text>
+      <CheckBadge position={[1.02, 0.58, 0.09]} />
+
+      {/* role line */}
+      <Text
+        font={FONT_SANS_MED}
+        fontSize={0.125}
+        color={C_EMBER_DEEP}
+        letterSpacing={0.05}
+        anchorX="left"
+        anchorY="middle"
+        position={[-1.36, 0.34, 0.09]}
+      >
+        {role}
       </Text>
 
-      <mesh position={[0, 0.06, 0.04]}>
+      {/* star rating + source tag */}
+      <group position={[-1.36, 0.09, 0.09]}>
+        {Array.from({ length: stars }).map((_, i) => (
+          <StarMesh key={i} radius={0.075} position={[i * 0.17, 0, 0]} />
+        ))}
+      </group>
+      <TagChip label={tag} position={[1.14, 0.09, 0.09]} />
+
+      <mesh position={[0, -0.12, 0.09]}>
         <boxGeometry args={[2.72, 0.012, 0.01]} />
         <meshBasicMaterial color={C_LINE} />
       </mesh>
@@ -683,9 +839,9 @@ function ProofCard({
         color={C_MUTED}
         anchorX="left"
         anchorY="middle"
-        lineHeight={1.35}
+        lineHeight={1.4}
         maxWidth={2.72}
-        position={[-1.36, -0.42, 0.04]}
+        position={[-1.36, -0.48, 0.09]}
       >
         {text}
       </Text>
@@ -693,24 +849,25 @@ function ProofCard({
   );
 }
 
-function ProofZone({ compact }: { compact: boolean }) {
+  function ProofZone({ compact }: { compact: boolean }) {
   const positions: [number, number, number][] = compact
     ? [
-        [0, 1.55, 0],
-        [0, 0.5, 0],
-        [0, -0.55, 0],
-        [0, -1.6, 0],
+        [0, 1.4, 0],
+        [0, 0.45, 0],
+        [0, -0.5, 0],
+        [0, -1.45, 0],
       ]
     : [
-        [-1.85, 0.9, 0],
-        [1.85, 0.9, 0],
-        [-1.85, -1.45, 0],
-        [1.85, -1.45, 0],
+        [-1.85, 0.7, 0],
+        [1.85, 0.7, 0],
+        [-1.85, -1.05, 0],
+        [1.85, -1.05, 0],
       ];
   const tilts = compact ? [0, 0, 0, 0] : [0.018, -0.018, -0.014, 0.014];
 
   return (
     <group>
+      <group position={[0, compact ? 0 : 0.1, 0]}>
       <Text
         font={FONT_SANS_MED}
         fontSize={0.2}
@@ -718,12 +875,12 @@ function ProofZone({ compact }: { compact: boolean }) {
         letterSpacing={0.18}
         anchorX="center"
         anchorY="middle"
-        position={[0, compact ? 2.05 : 2.75, 0]}
+        position={[0, compact ? 1.75 : 2.35, 0]}
       >
-        THE PROOF
+        TRUSTED BY
       </Text>
 
-      <group position={[0, compact ? 1.5 : 2.15, 0]}>
+      <group position={[0, compact ? 1.3 : 1.85, 0]}>
         <Inline
           segments={[
             { text: "Proof, not ", color: C_INK },
@@ -735,16 +892,33 @@ function ProofZone({ compact }: { compact: boolean }) {
         />
       </group>
 
+      <Text
+        font={FONT_SANS}
+        fontSize={compact ? 0.16 : 0.19}
+        color={C_MUTED}
+        anchorX="center"
+        anchorY="middle"
+        lineHeight={1.4}
+        maxWidth={compact ? 5 : 9}
+        position={[0, compact ? 0.65 : 1.28, 0]}
+      >
+        Real words from the people we build for — clients, buyers and patients.
+      </Text>
+
       {PROOF.map((t, i) => (
         <ProofCard
           key={i}
-          figure={t.figure}
+          name={t.name}
+          role={t.role}
+          tag={t.tag}
+          stars={t.stars}
           text={t.text}
           position={positions[i]}
           tilt={tilts[i]}
-          scale={compact ? 0.62 : 1}
+          scale={compact ? 0.62 : 0.95}
         />
       ))}
+      </group>
     </group>
   );
 }

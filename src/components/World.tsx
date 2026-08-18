@@ -85,6 +85,7 @@ function lerpCam(p: number) {
 
 function CameraRig() {
   const { camera } = useThree();
+  const invalidate = useThree((s) => s.invalidate);
   const reduce = useReducedMotion();
   const mouse = useRef({ x: 0, y: 0 });
   const target = useMemo(() => new THREE.Vector3(), []);
@@ -94,12 +95,15 @@ function CameraRig() {
     const onMove = (e: PointerEvent) => {
       mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.current.y = -((e.clientY / window.innerHeight) * 2 - 1);
+      // In frameloop="demand" the canvas only re-renders when invalidated.
+      invalidate();
     };
     window.addEventListener("pointermove", onMove, { passive: true });
 
     const onScroll = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       if (max > 0) setProgress(window.scrollY / max);
+      invalidate();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -108,7 +112,7 @@ function CameraRig() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("scroll", onScroll);
     };
-  }, []);
+  }, [invalidate]);
 
   useFrame((_, dt) => {
     // Track raw scroll continuously so the camera flows smoothly through
@@ -707,10 +711,13 @@ function TagChip({ label, position }: { label: string; position: [number, number
   const h = 0.24;
   return (
     <group position={position}>
-      <RoundedBox args={[w, h, 0.03]} radius={h / 2} smoothness={6} position={[0, 0, -0.004]}>
+      {/* Keep the border and fill on separate depth planes. Coplanar
+          rounded boxes can z-fight while the camera is moving through the
+          proof zone, which presents as a rapid dark flash on some GPUs. */}
+      <RoundedBox args={[w, h, 0.03]} radius={h / 2} smoothness={6} position={[0, 0, -0.035]}>
         <meshBasicMaterial color={C_EMBER} transparent opacity={0.4} />
       </RoundedBox>
-      <RoundedBox args={[w - 0.06, h - 0.06, 0.03]} radius={(h - 0.06) / 2} smoothness={6}>
+      <RoundedBox args={[w - 0.06, h - 0.06, 0.03]} radius={(h - 0.06) / 2} smoothness={6} position={[0, 0, 0.005]}>
         <meshBasicMaterial color={C_CREAM} />
       </RoundedBox>
       <mesh position={[-w / 2 + 0.16, 0, 0.02]}>
@@ -773,7 +780,7 @@ function ProofCard({
         setHover(false);
       }}
     >
-      <RoundedBox args={[3.18, 1.7, 0.08]} radius={0.1} smoothness={4} position={[0, 0, -0.03]}>
+      <RoundedBox args={[3.18, 1.7, 0.08]} radius={0.1} smoothness={4} position={[0, 0, -0.12]}>
         <meshStandardMaterial color={C_EMBER_DEEP} roughness={0.5} metalness={0.1} />
       </RoundedBox>
       <RoundedBox args={[3.1, 1.62, 0.1]} radius={0.1} smoothness={4}>
@@ -1707,6 +1714,37 @@ function LightformerRig() {
 }
 
 /* ═══════════════════════════════════════════════
+   QUALITY WATCHDOG — demotes slow machines at runtime
+   ═══════════════════════════════════════════════ */
+
+function QualityWatchdog({ onSlow }: { onSlow: () => void }) {
+  const ref = useRef({
+    sum: 0,
+    n: 0,
+    last: 0,
+    start: performance.now(),
+    fired: false,
+  });
+
+  useFrame(() => {
+    const r = ref.current;
+    if (r.fired) return;
+    const now = performance.now();
+    if (r.last) {
+      r.sum += now - r.last;
+      r.n++;
+      if (now - r.start > 2500 && r.n > 30 && r.sum / r.n > 40) {
+        r.fired = true;
+        onSlow();
+      }
+    }
+    r.last = now;
+  });
+
+  return null;
+}
+
+/* ═══════════════════════════════════════════════
    FULL SCENE
    ═══════════════════════════════════════════════ */
 
@@ -1732,14 +1770,19 @@ function useCompact() {
   return size.width / size.height < 1.15;
 }
 
-function FullScene({ low }: { low: boolean }) {
+function FullScene({ low, onSlow }: { low: boolean; onSlow: () => void }) {
   const compact = useCompact();
 
   return (
     <>
+      {/* An explicit scene background keeps the composer output opaque. With
+          an alpha canvas, an empty post-processing frame is otherwise
+          composited as black for a moment on some deployed GPUs. */}
+      <color attach="background" args={["#f4f1ea"]} />
       <fog attach="fog" args={["#f4f1ea", 10, 23]} />
       <CameraRig />
       <WorldLighting />
+      {!low && <QualityWatchdog onSlow={onSlow} />}
       {!low && <LightformerRig />}
 
       <Zone index={0} compact={compact}>
@@ -1789,6 +1832,7 @@ export function World() {
   const reduce = useReducedMotion();
   const [mobile, setMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [low, setLow] = useState<boolean>(isLowTier);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -1803,10 +1847,13 @@ export function World() {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Low tier: small screens, reduced-motion users and weak laptops get a
-  // lighter scene — capped pixel ratio, no environment HDR, no bloom, no
-  // particle systems. This is what stops the flicker on iGPU machines.
-  const low = reduce || mobile || isLowTier();
+  // Low tier: small screens, reduced-motion users, weak laptops and any
+  // machine the FPS watchdog catches get a lighter scene — capped pixel
+  // ratio, no environment HDR, no bloom, no particle systems, and the
+  // canvas only renders when scrolled (frameloop="demand") instead of
+  // repainting the whole screen at 60fps forever. This is what stops the
+  // flicker on iGPU machines.
+  const isLow = reduce || mobile || low;
 
   return (
     <div className="world-root" data-theme-bg="#f4f1ea" style={{ height: `${ZONES * 100}vh` }}>
@@ -1824,11 +1871,16 @@ export function World() {
           >
             <Canvas
               className="world-canvas"
-              dpr={low ? [1, 1] : [1, 1.25]}
-              gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+              dpr={isLow ? [1, 1] : [1, 1.25]}
+              frameloop={isLow ? "demand" : "always"}
+              gl={{
+                antialias: !isLow,
+                alpha: false,
+                powerPreference: isLow ? "low-power" : "high-performance",
+              }}
               camera={{ position: [0.5, 0.35, 7.2], fov: 50, near: 0.1, far: 200 }}
             >
-              <FullScene low={low} />
+              <FullScene low={isLow} onSlow={() => setLow(true)} />
             </Canvas>
           </ErrorBoundary>
         )}

@@ -43,9 +43,13 @@ export function Preloader() {
       if (minElapsed || maxTimedOut) {
         exited = true;
         sessionStorage.setItem(SEEN_KEY, "1");
+        // Fade + scale reveal. A full-screen CSS mask tween repaints the
+        // whole viewport per frame and flashes on weak GPUs — opacity and
+        // transform are compositor-only and never flicker.
         gsap.to(ref.current, {
-          "--iris": "0vmax",
-          duration: 0.9,
+          opacity: 0,
+          scale: 1.06,
+          duration: 0.8,
           ease: "power2.inOut",
           onComplete: finish,
         });
@@ -79,12 +83,7 @@ export function Preloader() {
   return (
     <div
       ref={ref}
-      className="iris fixed inset-0 z-[90] flex flex-col items-center justify-center overflow-hidden bg-[#f4f1ea]"
-      style={
-        {
-          "--iris": "190vmax",
-        } as React.CSSProperties
-      }
+      className="fixed inset-0 z-[90] flex flex-col items-center justify-center overflow-hidden bg-[#f4f1ea]"
       aria-hidden="true"
     >
       <Loader />

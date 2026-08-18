@@ -3,10 +3,10 @@
 let cached: boolean | null = null;
 
 /**
- * Cheap heuristic for "this machine can't hold 60fps with a heavy WebGL
- * scene". Weak laptops (Intel iGPUs, low RAM, few cores) are exactly the
- * machines that report the flicker, so we drop bloom, environment HDR,
- * particle systems and pixel ratio for them.
+ * Heuristic for "this machine can't hold 60fps with a heavy WebGL scene".
+ * Weak laptops (Intel iGPUs, 8GB RAM, few cores) are exactly the machines
+ * that report the flicker, so they get the lighter scene — and if the
+ * heuristic misses, the in-canvas FPS watchdog demotes them at runtime.
  */
 export function isLowTier(): boolean {
   if (cached !== null) return cached;
@@ -19,10 +19,10 @@ export function isLowTier(): boolean {
 
   let low = false;
   if (typeof nav.deviceMemory === "number" && nav.deviceMemory > 0) {
-    low ||= nav.deviceMemory <= 4;
+    low ||= nav.deviceMemory <= 8;
   }
   if (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency > 0) {
-    low ||= nav.hardwareConcurrency <= 4;
+    low ||= nav.hardwareConcurrency <= 6;
   }
 
   cached = low;

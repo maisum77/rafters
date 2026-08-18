@@ -161,23 +161,6 @@ button:hover .link-letters .ll-char {
   -webkit-text-fill-color: transparent;
 }
 
-/* ---------- iris reveal (preloader lens) ---------- */
-
-.iris {
-  -webkit-mask-image: radial-gradient(
-    circle at center,
-    #000 0,
-    #000 var(--iris, 0px),
-    transparent calc(var(--iris, 0px) + 1px)
-  );
-  mask-image: radial-gradient(
-    circle at center,
-    #000 0,
-    #000 var(--iris, 0px),
-    transparent calc(var(--iris, 0px) + 1px)
-  );
-}
-
 /* ---------- scrolled nav ---------- */
 
 .nav-scrolled {
@@ -518,6 +501,7 @@ button:hover .link-letters .ll-char {
   position: absolute !important;
   inset: 0;
   z-index: 0;
+  background: var(--color-background);
 }
 
 .world-vignette {
